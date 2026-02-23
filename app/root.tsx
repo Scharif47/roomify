@@ -1,13 +1,8 @@
-import {
-  isRouteErrorResponse,
-  Links,
-  Meta,
-  Outlet,
-  Scripts,
-  ScrollRestoration,
-} from "react-router";
+import { isRouteErrorResponse, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 
+import { useEffect, useState } from "react";
 import type { Route } from "./+types/root";
+import { getCurrentUser, signIn as puterSignIn, signOut as puterSignOut } from "lib/puter.action";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -23,7 +18,7 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children }: { readonly children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -41,8 +36,59 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+const DEFAULT_AUTH_STATE: AuthState = {
+  isSignedIn: false,
+  userName: null,
+  userId: null,
+};
+
 export default function App() {
-  return <Outlet />;
+  const [authState, setAuthState] = useState<AuthState>(DEFAULT_AUTH_STATE);
+
+  const refreshAuth = async () => {
+    try {
+      const user = await getCurrentUser();
+
+      setAuthState({
+        isSignedIn: !!user,
+        userName: user?.username || null,
+        userId: user?.uuid || null,
+      });
+
+      return !!user;
+    } catch {
+      setAuthState(DEFAULT_AUTH_STATE);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    refreshAuth();
+  }, []);
+
+  const signIn = async () => {
+    await puterSignIn();
+    return await refreshAuth();
+  };
+
+  const signOut = async () => {
+    puterSignOut();
+    return await refreshAuth();
+  };
+
+  return (
+    <main className="min-h-screen bg-background text-foreground relative z-10">
+      <Outlet
+        context={{
+          ...authState,
+          refreshAuth,
+          signIn,
+          signOut,
+        }}
+      />
+      ;
+    </main>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
@@ -52,10 +98,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
   if (isRouteErrorResponse(error)) {
     message = error.status === 404 ? "404" : "Error";
-    details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : error.statusText || details;
+    details = error.status === 404 ? "The requested page could not be found." : error.statusText || details;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message;
     stack = error.stack;
