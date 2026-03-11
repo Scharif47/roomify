@@ -41,8 +41,14 @@ const Upload = ({ onComplete }: UploadProps) => {
         setFile(null);
         setProgress(0);
       };
-      reader.onloadend = () => {
-        const base64Data = reader.result as string;
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result !== "string") {
+          setFile(null);
+          setProgress(0);
+          return;
+        }
+        const base64Data = result;
 
         intervalRef.current = setInterval(() => {
           setProgress((prev) => {
